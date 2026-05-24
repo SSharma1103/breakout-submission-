@@ -25,23 +25,29 @@ class FAQAnswerer:
         self.sop = sop
         self.client = OpenAI(api_key=OPENAI_API_KEY) if use_openai() else None
 
-    def answer(self, message: str) -> FAQAnswer:
+    def answer(self, message: str, context_messages: list[dict[str, str]] | None = None) -> FAQAnswer:
+        known_answer = self._answer_known_sop_fact(message)
+        if known_answer:
+            return known_answer
         if self.client:
-            return self._answer_with_openai(message)
+            return self._answer_with_openai(message, context_messages or [])
         return self._answer_locally(message)
 
-    def _answer_with_openai(self, message: str) -> FAQAnswer:
+    def _answer_with_openai(self, message: str, context_messages: list[dict[str, str]]) -> FAQAnswer:
         try:
             response = self.client.beta.chat.completions.parse(
                 model=OPENAI_MODEL,
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},
+                    *context_messages,
                     {
                         "role": "user",
                         "content": (
-                            "Answer the customer using only the SOP. If the answer is not "
-                            "directly in the SOP, return should_escalate=true.\n\n"
-                            f"SOP: {self.sop}\nCustomer message: {message}"
+                            "Answer the latest customer message. Use conversation context "
+                            "only to resolve references like 'that' or 'it'. Use the SOP "
+                            "only for factual answers. If the answer is not directly in "
+                            "the SOP, return should_escalate=true.\n\n"
+                            f"SOP: {self.sop}\nLatest customer message: {message}"
                         ),
                     },
                 ],
@@ -52,22 +58,47 @@ class FAQAnswerer:
             return self._answer_locally(message)
 
     def _answer_locally(self, message: str) -> FAQAnswer:
+        known_answer = self._answer_known_sop_fact(message)
+        if known_answer:
+            return known_answer
+
         text = message.lower()
-        if "botox" in text and re.search(r"\b(prices?|cost|how much|start)\b", text):
+        gap = self._gap_for_message(text)
+        return FAQAnswer(
+            answer="I don't have that information in the clinic SOP, so I'll pass this to a human team member.",
+            sop_supported=False,
+            evidence=None,
+            confidence=0.25,
+            sop_gap=gap,
+            should_escalate=True,
+            escalation_reason="Out-of-scope question",
+        )
+
+    def _answer_known_sop_fact(self, message: str) -> FAQAnswer | None:
+        text = message.lower()
+        if re.search(r"\b(services?|treatments?|offer|offered|provide)\b", text):
+            services = ", ".join(self.sop["services"].keys())
+            return FAQAnswer(
+                answer=f"Bloom Aesthetics Clinic offers {services}.",
+                sop_supported=True,
+                evidence=f"Services: {services}",
+                confidence=0.91,
+            )
+        if "botox" in text:
             return FAQAnswer(
                 answer="Botox starts from £200.",
                 sop_supported=True,
                 evidence="Services: Botox from £200",
                 confidence=0.92,
             )
-        if "filler" in text and re.search(r"\b(prices?|cost|how much|start)\b", text):
+        if "filler" in text:
             return FAQAnswer(
                 answer="Fillers start from £250.",
                 sop_supported=True,
                 evidence="Services: Fillers from £250",
                 confidence=0.92,
             )
-        if "consult" in text and re.search(r"\b(prices?|cost|free|how much)\b", text):
+        if "consult" in text:
             return FAQAnswer(
                 answer="Consultations are free.",
                 sop_supported=True,
@@ -96,16 +127,7 @@ class FAQAnswerer:
                 confidence=0.9,
             )
 
-        gap = self._gap_for_message(text)
-        return FAQAnswer(
-            answer="I don't have that information in the clinic SOP, so I'll pass this to a human team member.",
-            sop_supported=False,
-            evidence=None,
-            confidence=0.25,
-            sop_gap=gap,
-            should_escalate=True,
-            escalation_reason="Out-of-scope question",
-        )
+        return None
 
     @staticmethod
     def _gap_for_message(text: str) -> str:

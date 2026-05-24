@@ -22,22 +22,24 @@ class IntentClassifier:
         self.sop = sop
         self.client = OpenAI(api_key=OPENAI_API_KEY) if use_openai() else None
 
-    def classify(self, message: str) -> IntentResult:
+    def classify(self, message: str, context_messages: list[dict[str, str]] | None = None) -> IntentResult:
         if self.client:
-            return self._classify_with_openai(message)
+            return self._classify_with_openai(message, context_messages or [])
         return self._classify_locally(message)
 
-    def _classify_with_openai(self, message: str) -> IntentResult:
+    def _classify_with_openai(self, message: str, context_messages: list[dict[str, str]]) -> IntentResult:
         try:
             response = self.client.beta.chat.completions.parse(
                 model=OPENAI_MODEL,
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},
+                    *context_messages,
                     {
                         "role": "user",
                         "content": (
-                            "Classify the customer's latest message. Keep intent_confidence "
-                            "separate from lead_score.\n\n"
+                            "Classify the customer's latest message. Use recent conversation "
+                            "only to resolve short follow-ups and references. Keep "
+                            "intent_confidence separate from lead_score.\n\n"
                             f"SOP: {self.sop}\nMessage: {message}"
                         ),
                     },

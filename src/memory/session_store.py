@@ -34,6 +34,15 @@ class SessionState(BaseModel):
     def transcript(self) -> list[dict[str, Any]]:
         return [message.model_dump() for message in self.messages]
 
+    def recent_openai_messages(self, max_turns: int = 8, exclude_latest_user: bool = True) -> list[dict[str, str]]:
+        messages = [message for message in self.messages if message.role in {"user", "assistant"}]
+        if exclude_latest_user and messages and messages[-1].role == "user":
+            messages = messages[:-1]
+
+        max_messages = max_turns * 2
+        recent = messages[-max_messages:]
+        return [{"role": message.role, "content": message.content} for message in recent]
+
 
 class SessionStore:
     def __init__(self) -> None:

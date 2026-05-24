@@ -38,13 +38,19 @@ class CustomerSupportWorkflow:
 
     def process_user_message(self, session: SessionState, message: str) -> AgentResponse:
         session.add_message("user", message)
+        context_messages = session.recent_openai_messages(max_turns=8, exclude_latest_user=True)
 
-        escalation = self.escalation_detector.detect(message, session.unanswered_count)
+        if self._is_acknowledgement(message):
+            reply = self._acknowledgement_follow_up(session)
+            session.add_message("assistant", reply)
+            return AgentResponse(message=reply)
+
+        escalation = self.escalation_detector.detect(message, session.unanswered_count, context_messages)
         if escalation.should_escalate:
             reply = self._handle_escalation(session, message, escalation.reason, escalation.severity)
             return AgentResponse(message=reply, escalated=True)
 
-        intent = self.intent_classifier.classify(message)
+        intent = self.intent_classifier.classify(message, context_messages)
         session.intent_confidence = intent.intent_confidence
         self.lead_qualifier.update_from_message(
             session,
@@ -58,7 +64,7 @@ class CustomerSupportWorkflow:
             session.add_message("assistant", reply)
             return AgentResponse(message=reply, saved_lead=session.lead_saved)
 
-        answer = self.faq_answerer.answer(message)
+        answer = self.faq_answerer.answer(message, context_messages)
         reply_parts = [answer.answer]
 
         if answer.should_escalate:
@@ -145,3 +151,31 @@ class CustomerSupportWorkflow:
                 "user_message": user_message,
             }
         )
+
+    @staticmethod
+    def _is_acknowledgement(message: str) -> bool:
+        normalized = message.lower().strip(" .,!?:;")
+        return normalized in {
+            "nice",
+            "ok",
+            "okay",
+            "great",
+            "cool",
+            "good",
+            "thanks",
+            "thank you",
+            "got it",
+            "alright",
+        }
+
+    def _acknowledgement_follow_up(self, session: SessionState) -> str:
+        if session.service_interest and not session.email:
+            return (
+                "Glad that helped. If you'd like the clinic team to follow up about "
+                f"{session.service_interest}, could you share your email?"
+            )
+        if session.email and not session.booking_preference:
+            return "Would you prefer booking through WhatsApp or the website?"
+        if session.email and not session.urgency:
+            return "When are you hoping to come in?"
+        return "You're welcome. I can also help with booking, hours, or cancellation policy."

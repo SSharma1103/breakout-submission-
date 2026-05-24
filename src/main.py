@@ -41,6 +41,12 @@ def run_scenario(name: str) -> None:
     print(json.dumps(summary.model_dump(), indent=2, ensure_ascii=False))
 
 
+def print_final_summary(workflow: CustomerSupportWorkflow, session) -> None:
+    summary = workflow.final_summary(session)
+    print("\nFinal structured summary:")
+    print(json.dumps(summary.model_dump(), indent=2, ensure_ascii=False))
+
+
 def run_interactive() -> None:
     workflow = CustomerSupportWorkflow(load_sop())
     session = SessionStore().create()
@@ -48,18 +54,19 @@ def run_interactive() -> None:
     if not use_openai():
         print("System: OPENAI_API_KEY is not set, so deterministic local fallbacks are being used.")
 
-    while True:
-        user_message = input("You: ").strip()
-        if not user_message:
-            continue
-        if user_message.lower() in {"exit", "quit", "summary"}:
-            summary = workflow.final_summary(session)
-            print("\nFinal structured summary:")
-            print(json.dumps(summary.model_dump(), indent=2, ensure_ascii=False))
-            break
+    try:
+        while True:
+            user_message = input("You: ").strip()
+            if not user_message:
+                continue
+            if user_message.lower() in {"exit", "quit", "summary"}:
+                print_final_summary(workflow, session)
+                break
 
-        response = workflow.process_user_message(session, user_message)
-        print(f"AI: {response.message}")
+            response = workflow.process_user_message(session, user_message)
+            print(f"AI: {response.message}")
+    except KeyboardInterrupt:
+        print_final_summary(workflow, session)
 
 
 def main() -> None:

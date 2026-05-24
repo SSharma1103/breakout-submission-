@@ -108,7 +108,29 @@ class LeadQualifier:
             return True
         if lower in {"whatsapp", "website", "today", "tomorrow", "this week"}:
             return True
-        if re.fullmatch(r"[A-Za-z][A-Za-z\s'-]{1,30}", message.strip()):
+        blocked_words = {
+            "price",
+            "prices",
+            "cost",
+            "much",
+            "book",
+            "booking",
+            "appointment",
+            "botox",
+            "filler",
+            "fillers",
+            "consult",
+            "consultation",
+            "consultations",
+            "aftercare",
+            "hours",
+            "services",
+            "service",
+            "offered",
+            "offer",
+        }
+        words = set(re.findall(r"[a-z]+", lower))
+        if re.fullmatch(r"[A-Za-z][A-Za-z\s'-]{1,30}", message.strip()) and not words & blocked_words:
             return True
         return False
 

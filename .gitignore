@@ -1,0 +1,31 @@
+# Local environment
+.env
+.venv/
+venv/
+env/
+
+# Python cache and tooling
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Runtime mock database output
+src/db/conversations.json
+src/db/leads.json
+src/db/escalations.jsonl
+
+# Video walkthrough prep/output
+walkthrough_script.md
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
