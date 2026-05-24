@@ -1,4 +1,5 @@
 # Closira AI Agent
+video explanation (https://drive.google.com/file/d/1-zTIciGrf668ak97t6FYLNYRIADzGVG7/view)
 
 Python CLI project for an AI customer support workflow for the fictional Bloom Aesthetics Clinic.
 
